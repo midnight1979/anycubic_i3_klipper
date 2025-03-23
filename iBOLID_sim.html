@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Танковое управление iBOLID</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #121212; /* Темный фон */
+            color: #ffffff; /* Белый цвет текста */
+        }
+
+        h1, p {
+            color: #ffffff; /* Белый цвет для заголовков и параграфов */
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 50px;
+            margin-top: 50px;
+        }
+
+        .wheel {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 5px solid #ffffff; /* Белая граница для колес */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background-color: #333333; /* Темный цвет для колес */
+        }
+
+        .wheel::before {
+            content: "";
+            width: 10px;
+            height: 30px;
+            background: #ffffff; /* Белая стрелка */
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #joystick-container {
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 337.5px;
+            height: 337.5px;
+        }
+
+        #xValue, #yValue {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff; /* Белый цвет для значений */
+        }
+
+        #tank {
+            position: absolute;
+            width: 100px;
+            height: 60px;
+            background-color: #4CAF50; /* Зеленый цвет для танка */
+            border-radius: 10px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #turret {
+            position: absolute;
+            width: 50px;
+            height: 20px;
+            background-color: #2E8B57; /* Темно-зеленый цвет для турели */
+            border-radius: 5px;
+            top: 20px;
+            left: 25px;
+            transform-origin: left center;
+        }
+
+        #front-marker {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 20px solid red;
+            top: 50%;
+            left: 100%;
+            transform: translateX(-50%) translateY(-50%) rotate(90deg);
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Танковое управление iBOLID (симулятор)</h1>
+    <p>Используйте джойстик для управления движением</p>
+
+    <div class="container">
+        <div class="wheel" id="leftWheel"></div>
+        <div class="wheel" id="rightWheel"></div>
+    </div>
+
+    <div id="joystick-container"></div>
+
+    <!-- Шкала значений по осям X и Y -->
+    <div id="yValue">Y: 0</div>
+    <div id="xValue">X: 0</div>
+
+    <!-- Танк -->
+    <div id="tank">
+        <div id="front-marker"></div> <!-- Маркер передней части -->
+        <div id="turret"></div>
+    </div>
+
+    <script>
+        let leftSpeed = 0, rightSpeed = 0;
+        let targetLeftSpeed = 0, targetRightSpeed = 0;
+        let maxSpeed = 5; // Скорость вращения колёс
+        let acceleration = 0.1; // Плавное ускорение
+        let deadZone = 0.2; // Мёртвая зона по оси X (поворот)
+        let leftRotation = 0, rightRotation = 0; // Угол поворота колёс
+
+        // Позиция и направление танка
+        let tankX = window.innerWidth / 2-50;
+        let tankY = window.innerHeight /2-50;
+        let tankRotation = -Math.PI / 2; // 90  поворота танка
+        const tankSpeed = 0.5; // Скорость движения танка
+        const rotationSpeed = 0.005; // Скорость поворота танка
+
+        // Элементы танка
+        const tankElement = document.getElementById("tank");
+        const turretElement = document.getElementById("turret");
+
+        // Границы экрана и зона джойстика
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        const joystickZone = document.getElementById("joystick-container").getBoundingClientRect();
+
+        // Функция обновления вращения колёс и движения танка
+        function updateWheelsAndTank() {
+            // Плавное изменение скорости колес
+            leftSpeed += (targetLeftSpeed - leftSpeed) * acceleration;
+            rightSpeed += (targetRightSpeed - rightSpeed) * acceleration;
+
+            // Обновление угла поворота колес
+            leftRotation += leftSpeed;
+            rightRotation += rightSpeed;
+
+            // Применение вращения к колесам
+            document.getElementById("leftWheel").style.transform = `rotate(${leftRotation}deg)`;
+            document.getElementById("rightWheel").style.transform = `rotate(${rightRotation}deg)`;
+
+            // Движение танка
+            const averageSpeed = (leftSpeed + rightSpeed) / 2;
+            tankX += Math.cos(tankRotation) * averageSpeed * tankSpeed;
+            tankY += Math.sin(tankRotation) * averageSpeed * tankSpeed;
+
+            // Ограничение движения танка внутри экрана
+            if (tankX < 0) tankX = 0;
+            if (tankY < 0) tankY = 0;
+            if (tankX > screenWidth - tankElement.offsetWidth) tankX = screenWidth - tankElement.offsetWidth;
+            if (tankY > screenHeight - tankElement.offsetHeight) tankY = screenHeight - tankElement.offsetHeight;
+
+            // Поворот танка
+            const rotationDifference = (rightSpeed - leftSpeed) * rotationSpeed;
+            tankRotation += rotationDifference;
+
+            // Обновление позиции и поворота танка
+            tankElement.style.left = `${tankX}px`;
+            tankElement.style.top = `${tankY}px`;
+            tankElement.style.transform = `rotate(${tankRotation}rad)`;
+
+            // Обновление анимации
+            requestAnimationFrame(updateWheelsAndTank);
+        }
+
+        // Функция перемещения
+        function move(forward, turn) {
+            // Применяем мертвую зону только для поворота (оси X)
+            if (Math.abs(turn) < deadZone) turn = 0;
+
+            // Инвертируем направление вращения колес
+            targetLeftSpeed = (forward * maxSpeed) - (turn * maxSpeed);  // Поворот влияет на левое колесо
+            targetRightSpeed = (forward * maxSpeed) + (turn * maxSpeed); // Поворот влияет на правое колесо
+        }
+
+        // Создание джойстика
+        let joystick = nipplejs.create({
+            zone: document.getElementById("joystick-container"),
+            mode: "dynamic",
+            position: { left: "50%", top: "50%" },
+            color: "blue"
+        });
+
+        // Обработчик движения джойстика
+        joystick.on("move", (evt, data) => {
+            // Получаем значение для оси Y (движение вперед/назад) и X (поворот)
+            let forward = Math.sin(data.angle.radian) * data.force; // Направление вперед/назад (ось Y)
+            let turn = Math.cos(data.angle.radian) * data.force; // Направление влево/вправо (ось X)
+
+            // Отображаем значения по осям X и Y от -2047 до 2047
+            let x = Math.round(turn * 2047); // Поворот — ось X
+            let y = Math.round(forward * 2047); // Движение вперед/назад — ось Y
+
+            // Ограничиваем значения от -2047 до 2047
+            x = Math.min(Math.max(x, -2047), 2047);
+            y = Math.min(Math.max(y, -2047), 2047);
+
+            // Обновляем значения на странице
+            document.getElementById("xValue").textContent = `X: ${x}`; // Поворот — ось X
+            document.getElementById("yValue").textContent = `Y: ${y}`; // Движение вперед/назад — ось Y
+
+            // Передаем данные в функцию движения
+            move(y / 2047, x / 2047); // Преобразуем в нужный диапазон для движения
+        });
+
+        // Обработчик завершения движения
+        joystick.on("end", () => {
+            targetLeftSpeed = 0;
+            targetRightSpeed = 0;
+
+            // Возвращаем значения X и Y в 0
+            document.getElementById("xValue").textContent = "X: 0";
+            document.getElementById("yValue").textContent = "Y: 0";
+        });
+
+        // Запуск обновления анимации колёс и танка
+        updateWheelsAndTank();
+    </script>
+
+</body>
+</html>
